@@ -26,8 +26,16 @@ data class EditState(
     val rotation: Float,
     val cropRect: RectF?,
     val flipHorizontal: Boolean = false,
-    val flipVertical: Boolean = false
+    val flipVertical: Boolean = false,
+    val textOverlay: String? = null,
+    val textSizeScale: Float = 0.08f,
+    val textBold: Boolean = false,
+    val textFont: TextFont = TextFont.SANS
 )
+
+enum class TextFont {
+    SANS, SERIF, MONO
+}
 
 data class CropRect(
     val left: Float,

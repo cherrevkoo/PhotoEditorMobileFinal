@@ -2,7 +2,11 @@ package com.practicum.photoeditormobile.viewmodel
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.getValue
@@ -67,6 +71,11 @@ class PhotoEditorViewModel : ViewModel() {
     var rotation by mutableFloatStateOf(0f)
     var flipHorizontal by mutableStateOf(false)
     var flipVertical by mutableStateOf(false)
+    var textOverlay by mutableStateOf<String?>(null)
+    var textSizeScale by mutableFloatStateOf(0.08f)
+    var textBold by mutableStateOf(false)
+    var textFont by mutableStateOf(TextFont.SANS)
+    var showTextDialog by mutableStateOf(false)
     
     val presets = mutableStateListOf<Preset>()
     var showExportDialog by mutableStateOf(false)
@@ -137,6 +146,10 @@ class PhotoEditorViewModel : ViewModel() {
                     curvesVersion = 0
                     flipHorizontal = false
                     flipVertical = false
+                    textOverlay = null
+                    textSizeScale = 0.08f
+                    textBold = false
+                    textFont = TextFont.SANS
                     history.clear()
                     historyIndex = -1
                     saveToHistory()
@@ -181,6 +194,10 @@ class PhotoEditorViewModel : ViewModel() {
         curvesVersion = 0
         flipHorizontal = false
         flipVertical = false
+        textOverlay = null
+        textSizeScale = 0.08f
+        textBold = false
+        textFont = TextFont.SANS
         history.clear()
         historyIndex = -1
         saveToHistory()
@@ -224,7 +241,8 @@ class PhotoEditorViewModel : ViewModel() {
             "applyAll start: base=${baseBitmap.width}x${baseBitmap.height} " +
                 "flipH=$flipHorizontal flipV=$flipVertical rot=$rotation crop=${cropRect != null} " +
                 "filter=$currentFilterName effect=$currentEffectName " +
-                "b=$brightness c=$contrast s=$saturation w=$warmth sh=$sharpness"
+                "b=$brightness c=$contrast s=$saturation w=$warmth sh=$sharpness text=$textOverlay " +
+                "textSize=$textSizeScale textBold=$textBold textFont=$textFont"
         )
         
         if (cropRect != null && cropRectRotation != rotation) {
@@ -297,10 +315,11 @@ class PhotoEditorViewModel : ViewModel() {
         val hasFilters = currentFilterName != "Нет" || currentEffectName != null ||
             brightness != 50f || contrast != 1f || saturation != 1f ||
             warmth != 0f || sharpness != 0f || autoEnhanceEnabled ||
-            !curveMaster.isIdentity() || !curveR.isIdentity() || !curveG.isIdentity() || !curveB.isIdentity()
+            !curveMaster.isIdentity() || !curveR.isIdentity() || !curveG.isIdentity() || !curveB.isIdentity() ||
+            !textOverlay.isNullOrBlank()
         
         if (!hasFilters) {
-            currentBitmap = transformedBitmap
+            currentBitmap = applyTextOverlay(transformedBitmap)
             AppLog.d(LOG, "applyAll done: no filters -> ${transformedBitmap.width}x${transformedBitmap.height}")
             return
         }
@@ -320,6 +339,10 @@ class PhotoEditorViewModel : ViewModel() {
         val rCurve = curveR
         val gCurve = curveG
         val bCurve = curveB
+        val currentTextOverlay = textOverlay
+        val currentTextSizeScale = textSizeScale
+        val currentTextBold = textBold
+        val currentTextFont = textFont
         
         applyJob = viewModelScope.launch {
             isLoading = true
@@ -348,7 +371,13 @@ class PhotoEditorViewModel : ViewModel() {
                         bCurve.isIdentity()
 
                 if (onlyAutoEnhance) {
-                    currentBitmap = enhancedBitmap
+                    currentBitmap = applyTextOverlay(
+                        bitmap = enhancedBitmap,
+                        text = currentTextOverlay,
+                        sizeScale = currentTextSizeScale,
+                        bold = currentTextBold,
+                        font = currentTextFont
+                    )
                     AppLog.d(LOG, "applyAll done: autoEnhance-only -> ${enhancedBitmap.width}x${enhancedBitmap.height}")
                     return@launch
                 }
@@ -363,7 +392,6 @@ class PhotoEditorViewModel : ViewModel() {
                         bitmap = enhancedBitmap,
                         baseFilter = baseFilter,
                         effectFilter = effectFilter,
-                        // brightness 0..100 -> GPUImageBrightnessFilter expects -1..1
                         brightness = AdjustMappings.brightnessUiToGpu(currentBrightness),
                         contrast = AdjustMappings.contrastSafe(currentContrast),
                         saturation = AdjustMappings.saturationSafe(currentSaturation),
@@ -376,14 +404,19 @@ class PhotoEditorViewModel : ViewModel() {
                     )
                 }
                 
-                currentBitmap = result ?: enhancedBitmap
+                currentBitmap = applyTextOverlay(
+                    bitmap = result ?: enhancedBitmap,
+                    text = currentTextOverlay,
+                    sizeScale = currentTextSizeScale,
+                    bold = currentTextBold,
+                    font = currentTextFont
+                )
                 AppLog.d(LOG, "applyAll done: filtered -> ${currentBitmap?.width}x${currentBitmap?.height}")
             } catch (e: OutOfMemoryError) {
                 errorMessage = "Недостаточно памяти для обработки изображения"
                 currentBitmap = bitmapForFilters
                 AppLog.e(LOG, "applyAll OOM during filters", e)
             } catch (e: CancellationException) {
-                // Normal case: previous apply job gets cancelled when user drags sliders quickly.
                 AppLog.d(LOG, "applyAll cancelled")
                 return@launch
             } catch (e: Exception) {
@@ -443,7 +476,11 @@ class PhotoEditorViewModel : ViewModel() {
             rotation = rotation,
             cropRect = cropRect?.let { RectF(it.left, it.top, it.right, it.bottom) },
             flipHorizontal = flipHorizontal,
-            flipVertical = flipVertical
+            flipVertical = flipVertical,
+            textOverlay = textOverlay,
+            textSizeScale = textSizeScale,
+            textBold = textBold,
+            textFont = textFont
         )
     }
     
@@ -467,6 +504,10 @@ class PhotoEditorViewModel : ViewModel() {
             rotation = state.rotation
             flipHorizontal = state.flipHorizontal
             flipVertical = state.flipVertical
+            textOverlay = state.textOverlay
+            textSizeScale = state.textSizeScale
+            textBold = state.textBold
+            textFont = state.textFont
             cropRect = state.cropRect?.let {
                 CropRect(it.left, it.top, it.right, it.bottom)
             }
@@ -555,6 +596,80 @@ class PhotoEditorViewModel : ViewModel() {
             ToolType.NONE -> {
                 showBottomSheet = false
             }
+        }
+    }
+
+    fun openTextEditor() {
+        if (originalBitmap == null) return
+        showTextDialog = true
+    }
+
+    fun applyTextOverlayText(
+        newText: String,
+        sizeScale: Float = textSizeScale,
+        bold: Boolean = textBold,
+        font: TextFont = textFont
+    ) {
+        if (originalBitmap == null) return
+        val normalizedText = newText.trim().ifBlank { null }
+        val normalizedSize = sizeScale.coerceIn(0.03f, 0.2f)
+        if (
+            textOverlay == normalizedText &&
+            textSizeScale == normalizedSize &&
+            textBold == bold &&
+            textFont == font
+        ) {
+            showTextDialog = false
+            return
+        }
+        textOverlay = normalizedText
+        textSizeScale = normalizedSize
+        textBold = bold
+        textFont = font
+        showTextDialog = false
+        applyAll()
+        saveToHistoryIfChanged()
+    }
+
+    private fun applyTextOverlay(
+        bitmap: Bitmap,
+        text: String? = textOverlay,
+        sizeScale: Float = textSizeScale,
+        bold: Boolean = textBold,
+        font: TextFont = textFont
+    ): Bitmap {
+        if (text.isNullOrBlank()) return bitmap
+        return try {
+            val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            val canvas = Canvas(mutableBitmap)
+            val textSize = (
+                mutableBitmap.width.coerceAtMost(mutableBitmap.height) * sizeScale.coerceIn(0.03f, 0.2f)
+            ).coerceAtLeast(24f)
+            val typefaceFamily = when (font) {
+                TextFont.SANS -> Typeface.SANS_SERIF
+                TextFont.SERIF -> Typeface.SERIF
+                TextFont.MONO -> Typeface.MONOSPACE
+            }
+            val typefaceStyle = if (bold) Typeface.BOLD else Typeface.NORMAL
+
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                this.textSize = textSize
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(typefaceFamily, typefaceStyle)
+            }
+            val shadowPaint = Paint(textPaint).apply {
+                color = Color.BLACK
+            }
+
+            val x = mutableBitmap.width / 2f
+            val y = mutableBitmap.height * 0.9f
+            canvas.drawText(text, x + 2f, y + 2f, shadowPaint)
+            canvas.drawText(text, x, y, textPaint)
+            mutableBitmap
+        } catch (e: Exception) {
+            AppLog.e(LOG, "applyTextOverlay exception: ${e.message}", e)
+            bitmap
         }
     }
 
