@@ -716,7 +716,90 @@ fun PhotoEditorScreen(
             )
         }
 
-
+        if (viewModel.showTextDialog) {
+            var textInput by remember(viewModel.showTextDialog, viewModel.textOverlay) {
+                mutableStateOf(viewModel.textOverlay.orEmpty())
+            }
+            var textSizeScale by remember(viewModel.showTextDialog, viewModel.textSizeScale) {
+                mutableFloatStateOf(viewModel.textSizeScale)
+            }
+            var textBold by remember(viewModel.showTextDialog, viewModel.textBold) {
+                mutableStateOf(viewModel.textBold)
+            }
+            var textFont by remember(viewModel.showTextDialog, viewModel.textFont) {
+                mutableStateOf(viewModel.textFont)
+            }
+            AlertDialog(
+                onDismissRequest = { viewModel.showTextDialog = false },
+                title = { Text("Текст на фото") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            singleLine = false,
+                            maxLines = 3,
+                            placeholder = { Text("Введите текст") }
+                        )
+                        Text("Размер: ${(textSizeScale * 100).toInt()}%")
+                        Slider(
+                            value = textSizeScale,
+                            onValueChange = { textSizeScale = it },
+                            valueRange = 0.03f..0.2f
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Жирный")
+                            Switch(
+                                checked = textBold,
+                                onCheckedChange = { textBold = it }
+                            )
+                        }
+                        Text("Шрифт")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = textFont == TextFont.SANS,
+                                onClick = { textFont = TextFont.SANS },
+                                label = { Text("Sans", fontFamily = FontFamily.SansSerif) }
+                            )
+                            FilterChip(
+                                selected = textFont == TextFont.SERIF,
+                                onClick = { textFont = TextFont.SERIF },
+                                label = { Text("Serif", fontFamily = FontFamily.Serif) }
+                            )
+                            FilterChip(
+                                selected = textFont == TextFont.MONO,
+                                onClick = { textFont = TextFont.MONO },
+                                label = { Text("Mono", fontFamily = FontFamily.Monospace) }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.applyTextOverlayText(
+                                newText = textInput,
+                                sizeScale = textSizeScale,
+                                bold = textBold,
+                                font = textFont
+                            )
+                        }
+                    ) {
+                        Text("Применить")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.showTextDialog = false }
+                    ) {
+                        Text("Отмена")
+                    }
+                }
+            )
+        }
     }
 }
 
