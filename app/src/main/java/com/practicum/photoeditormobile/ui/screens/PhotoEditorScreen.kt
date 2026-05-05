@@ -745,7 +745,7 @@ fun PhotoEditorScreen(
                         Slider(
                             value = textSizeScale,
                             onValueChange = { textSizeScale = it },
-                            valueRange = 0.03f..0.2f
+                            valueRange = 0.03f..1.0f
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -612,7 +612,7 @@ class PhotoEditorViewModel : ViewModel() {
     ) {
         if (originalBitmap == null) return
         val normalizedText = newText.trim().ifBlank { null }
-        val normalizedSize = sizeScale.coerceIn(0.03f, 0.2f)
+        val normalizedSize = sizeScale.coerceIn(0.03f, 1.0f)
         if (
             textOverlay == normalizedText &&
             textSizeScale == normalizedSize &&
@@ -643,7 +643,7 @@ class PhotoEditorViewModel : ViewModel() {
             val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
             val canvas = Canvas(mutableBitmap)
             val textSize = (
-                mutableBitmap.width.coerceAtMost(mutableBitmap.height) * sizeScale.coerceIn(0.03f, 0.2f)
+                mutableBitmap.width.coerceAtMost(mutableBitmap.height) * sizeScale.coerceIn(0.03f, 1.0f)
             ).coerceAtLeast(24f)
             val typefaceFamily = when (font) {
                 TextFont.SANS -> Typeface.SANS_SERIF
